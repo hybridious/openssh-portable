@@ -169,33 +169,29 @@ static int
 fd_table_initialize()
 {
 	char *posix_state;
+	struct w32_io *pio;
+	HANDLE wh;
 	/* table entries representing std in, out and error*/
-	struct w32_io *w32_io_stdin, *w32_io_stdout, *w32_io_stderr;
-
-	w32_io_stdin = malloc(sizeof(struct w32_io));
-	w32_io_stdout = malloc(sizeof(struct w32_io));
-	w32_io_stderr = malloc(sizeof(struct w32_io));
-	if (!w32_io_stdin || !w32_io_stdout || !w32_io_stderr) {
-		errno = ENOMEM;
-		return -1;
-	}
+	DWORD wh_index[] = { STD_INPUT_HANDLE , STD_OUTPUT_HANDLE , STD_ERROR_HANDLE };
+	int fd_num = 0;
 
 	memset(&fd_table, 0, sizeof(fd_table));
 
-	memset(w32_io_stdin, 0, sizeof(struct w32_io));
-	w32_io_stdin->handle = GetStdHandle(STD_INPUT_HANDLE);
-	w32_io_stdin->type = NONSOCK_SYNC_FD;
-	fd_table_set(w32_io_stdin, STDIN_FILENO);
-
-	memset(w32_io_stdout, 0, sizeof(struct w32_io));
-	w32_io_stdout->handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	w32_io_stdout->type = NONSOCK_SYNC_FD;
-	fd_table_set(w32_io_stdout, STDOUT_FILENO);
-
-	memset(w32_io_stderr, 0, sizeof(struct w32_io));
-	w32_io_stderr->handle = GetStdHandle(STD_ERROR_HANDLE);
-	w32_io_stderr->type = NONSOCK_SYNC_FD;
-	fd_table_set(w32_io_stderr, STDERR_FILENO);
+	/* prepare std io fds */
+	for (fd_num = STDIN_FILENO; fd_num <= STDERR_FILENO; fd_num++) {
+		wh  = GetStdHandle(wh_index[fd_num]);
+		if (wh != NULL && wh != INVALID_HANDLE_VALUE) {
+			pio = malloc(sizeof(struct w32_io));
+			if (!pio) {
+				errno = ENOMEM;
+				return -1;
+			}
+			memset(pio, 0, sizeof(struct w32_io));
+			pio->type = NONSOCK_SYNC_FD;
+			pio->handle = wh;
+			fd_table_set(pio, fd_num);
+		}
+	}
 
 	_dupenv_s(&posix_state, NULL, POSIX_STATE_ENV);
 	if (NULL != posix_state) {

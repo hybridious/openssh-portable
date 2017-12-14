@@ -231,13 +231,6 @@ duplicate_token_for_client(struct agent_connection* con, HANDLE t) {
 	ULONG client_pid;
 	HANDLE client_proc = NULL, dup_t = NULL;
 
-	/* Should the token match client's session id?
-	ULONG client_sessionId;
-	if (GetNamedPipeClientSessionId(con->pipe_handle, &client_sessionId) == FALSE ||
-	    SetTokenInformation(t, TokenSessionId, &client_sessionId, sizeof(client_sessionId)) == FALSE) {
-		error("unable to set token session id, error: %d", GetLastError());
-		goto done;
-	}*/
 
 	if ((FALSE == GetNamedPipeClientProcessId(con->pipe_handle, &client_pid)) ||
 		((client_proc = OpenProcess(PROCESS_DUP_HANDLE, FALSE, client_pid)) == NULL) ||

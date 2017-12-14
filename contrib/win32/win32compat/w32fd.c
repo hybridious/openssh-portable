@@ -83,14 +83,20 @@ struct inh_fd_state {
 #define POSIX_STATE_ENV "c28fc6f98a2c44abbbd89d6a3037d0d9_POSIX_STATE"
 
 static char*
-fd_encode_state(int fd_in, int fd_out, int fd_err, int num_aux_fds, int parent_aux_fds[], int child_aux_fds[], HANDLE aux_h[])
+fd_encode_state(const posix_spawn_file_actions_t *file_actions, HANDLE aux_h[])
 {
 	char *buf, *encoded;
 	struct std_fd_state *std_fd_state;
-	struct inh_fd_state *inh_fd_state, *c;
+	struct inh_fd_state *c;
 	DWORD len_req;
 	BOOL b;
 	int i;
+	int fd_in = file_actions->stdio_redirect[STDIN_FILENO];
+	int fd_out = file_actions->stdio_redirect[STDOUT_FILENO];
+	int fd_err = file_actions->stdio_redirect[STDERR_FILENO];
+	int num_aux_fds = file_actions->num_aux_fds;
+	const int *parent_aux_fds = file_actions->aux_fds_info.parent_fd;
+	const int *child_aux_fds = file_actions->aux_fds_info.child_fd;
 
 	buf = malloc(8 * (1 + num_aux_fds));
 	if (!buf) {
@@ -129,8 +135,8 @@ fd_decode_state(char* enc_buf)
 	char* buf;
 	DWORD req, skipped, out_flags;
 	struct std_fd_state *std_fd_state;
-	struct inh_fd_state *inh_fd_state, *c;
-	int i, num_inherited = 0;
+	struct inh_fd_state *c;
+	int num_inherited = 0;
 
 	CryptStringToBinary(enc_buf, 0, CRYPT_STRING_BASE64 | CRYPT_STRING_STRICT, NULL, &req, &skipped, &out_flags);
 	buf = malloc(req);
@@ -1015,15 +1021,28 @@ int fork()
 	return -1;
 }
 
-HANDLE spawn_user_token = NULL;
+/*
+* spawn a child process
+* - specified by cmd with agruments argv
+* - with std handles set to in, out, err
+* - flags are passed to CreateProcess call
+*
+* cmd will be internally decoarated with a set of '"'
+* to account for any spaces within the commandline
+* this decoration is done only when additional arguments are passed in argv
+*
+* spawned child will run as spawn_user_token if spawn_user_token != NULL
+*/
 
+HANDLE spawn_user_token = NULL;
 static int
-spawn_child_internal(char* cmd, char** argv, HANDLE in, HANDLE out, HANDLE err, unsigned long flags)
+spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags)
 {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
 	BOOL b;
-	char *cmdline, *t, **t1;
+	char *cmdline, *t;
+	char * const *t1;
 	DWORD cmdline_len = 0;
 	wchar_t * cmdline_utf16 = NULL;
 	int add_module_path = 0, ret = -1;
@@ -1129,25 +1148,6 @@ cleanup:
 	return ret;
 }
 
-/*
-* spawn a child process
-* - specified by cmd with agruments argv
-* - with std handles set to in, out, err
-* - flags are passed to CreateProcess call
-*
-* cmd will be internally decoarated with a set of '"'
-* to account for any spaces within the commandline
-* this decoration is done only when additional arguments are passed in argv
-*/
-int
-spawn_child(char* cmd, char** argv, int in, int out, int err, unsigned long flags) 
-{
-	HANDLE h_in = w32_fd_to_handle(in);
-	HANDLE h_out = w32_fd_to_handle(out);
-	HANDLE h_err = w32_fd_to_handle(err);
-	return spawn_child_internal(cmd, argv, h_in, h_out, h_err, flags);
-}
-
 #include "inc\spawn.h"
 int
 posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
@@ -1184,12 +1184,7 @@ posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *fil
 	}
 
 	/* set fd info */
-	if ((fd_info = fd_encode_state(file_actions->stdio_redirect[STDIN_FILENO],
-					file_actions->stdio_redirect[STDOUT_FILENO],
-					file_actions->stdio_redirect[STDERR_FILENO],
-					file_actions->num_aux_fds,
-					file_actions->aux_fds_info.parent_fd,
-					file_actions->aux_fds_info.child_fd,
+	if ((fd_info = fd_encode_state(file_actions,
 					aux_handles)) == NULL)
 		goto cleanup;
 

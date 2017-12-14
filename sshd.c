@@ -72,7 +72,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
-#include <spawn.h>
 
 #ifdef WITH_OPENSSL
 #include <openssl/dh.h>

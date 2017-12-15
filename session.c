@@ -518,9 +518,6 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		*cmd = '\0';
 	}
 
-	/* load user profile */
-	load_user_profile(s->pw->pw_name, (HANDLE)s->authctxt->auth_token);
-
 	/* start the process */
 	{
 		memset(&si, 0, sizeof(STARTUPINFO));
@@ -536,20 +533,13 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		si.hStdError = (HANDLE)w32_fd_to_handle(pipeerr[1]);
 		si.lpDesktop = NULL;
 
-		hToken = s->authctxt->auth_token;
-
 		debug("Executing command: %s", exec_command);
 		UTF8_TO_UTF16_FATAL(exec_command_w, exec_command);
 		
 		/* in debug mode launch using sshd.exe user context */
-		if (debug_flag)
-			create_process_ret_val = CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE,
-				DETACHED_PROCESS, NULL, pw_dir_w,
-				&si, &pi);
-		else /* launch as client user context */
-			create_process_ret_val = CreateProcessAsUserW(hToken, NULL, exec_command_w, NULL, NULL, TRUE,
-				DETACHED_PROCESS , NULL, pw_dir_w,
-				&si, &pi);
+		create_process_ret_val = CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE,
+			DETACHED_PROCESS, NULL, pw_dir_w,
+			&si, &pi);
 
 		if (!create_process_ret_val)
 			fatal("ERROR. Cannot create process (%u).\n", GetLastError());

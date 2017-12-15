@@ -230,6 +230,7 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 }
 
 #elif defined(WINDOWS)
+HANDLE password_auth_token = NULL;
 void 
 sys_auth_passwd_lsa(Authctxt *authctxt, const char *password)
 {
@@ -252,7 +253,7 @@ sys_auth_passwd_lsa(Authctxt *authctxt, const char *password)
 				fatal("utf16_to_utf8 failed to convert lsa_auth_pkg_w:%ls", lsa_auth_pkg_w);
 
 			debug("Authenticating using LSA Auth Package:%ls", lsa_auth_pkg_w);
-			authctxt->auth_token = process_custom_lsa_auth(authctxt->pw->pw_name, password, lsa_auth_pkg);
+			password_auth_token = process_custom_lsa_auth(authctxt->pw->pw_name, password, lsa_auth_pkg);
 		}
 	}
 
@@ -292,7 +293,7 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 
 	if (LogonUserExExWHelper(user_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK_CLEARTEXT,
 	    LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL) == TRUE)
-		authctxt->auth_token = (void*)(INT_PTR)token;
+		password_auth_token = token;
 	else {
 		if (GetLastError() == ERROR_PASSWORD_MUST_CHANGE)
 			/*
@@ -309,7 +310,7 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 	}
 			
 done:
-	if (authctxt->auth_token)
+	if (password_auth_token)
 		r = 1;
 
 	if (user_utf16)

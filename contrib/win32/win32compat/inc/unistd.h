@@ -81,6 +81,8 @@ char *crypt(const char *key, const char *salt);
 int link(const char *oldpath, const char *newpath);
 int readlink(const char *path, char *link, int linklen);
 
+int chroot(const char *path);
+
 /* 
  * readpassphrase.h definitions 
  * cannot create a separate header due to the way

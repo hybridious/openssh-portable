@@ -237,12 +237,7 @@ int startup_pipe;		/* in child */
 int use_privsep = -1;
 struct monitor *pmonitor = NULL;
 int privsep_is_preauth = 1;
-#ifdef WINDOWS
-/* Windows does not use Unix privilege separation model */
-static int privsep_chroot = 0;
-#else
 static int privsep_chroot = 1;
-#endif
 
 /* global authentication context */
 Authctxt *the_authctxt = NULL;
@@ -2003,7 +1998,6 @@ main(int ac, char **av)
 #endif
 	);
 
-#ifndef WINDOWS /* not applicable in Windows */
 	/* Store privilege separation user for later use if required. */
 	privsep_chroot = use_privsep && (getuid() == 0 || geteuid() == 0);
 	if ((privsep_pw = getpwnam(SSH_PRIVSEP_USER)) == NULL) {
@@ -2018,7 +2012,6 @@ main(int ac, char **av)
 		privsep_pw->pw_passwd = xstrdup("*");
 	}
 	endpwent();
-#endif /* !WINDOWS */
 	
 	if (privsep_auth_child || privsep_unauth_child) {
 		recv_hostkeys_state(PRIVSEP_MONITOR_FD);

@@ -200,8 +200,7 @@ userauth_pubkey(struct ssh *ssh)
 
 		if (PRIVSEP(user_key_allowed(authctxt->pw, key, 1)) &&
 #ifdef WINDOWS
-		    (authctxt->auth_token = mm_auth_pubkey(authctxt->pw->pw_name, 
-		    key, sig, slen, b)) != NULL) {
+		    (authctxt->auth_token = get_user_token(authctxt->pw->pw_name)) != NULL) {
 #else
 		    PRIVSEP(sshkey_verify(key, sig, slen, sshbuf_ptr(b),
 		    sshbuf_len(b), ssh->compat)) == 0) {

@@ -519,7 +519,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	}
 
 	/* load user profile */
-	mm_load_profile(s->pw->pw_name, ((INT_PTR)s->authctxt->auth_token) & 0xffffffff);
+	load_user_profile(s->pw->pw_name, (HANDLE)s->authctxt->auth_token);
 
 	/* start the process */
 	{

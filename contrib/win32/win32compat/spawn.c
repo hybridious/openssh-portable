@@ -1,3 +1,8 @@
+/*
+* Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
+*
+* Implementation of POSIX spawn family of functions
+*/
 #include <Windows.h>
 #include "inc\spawn.h"
 #include "inc\unistd.h"

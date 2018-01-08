@@ -1,3 +1,8 @@
+/*
+* Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
+*
+* Declarations of POSIX spawn family of functions
+*/
 #pragma once
 #include "sys\types.h"
 

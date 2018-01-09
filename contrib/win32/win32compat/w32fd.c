@@ -65,110 +65,8 @@ HANDLE main_thread;
 
 void fd_table_set(struct w32_io* pio, int index);
 
-struct std_fd_state {
-	int num_inherited;
-	char in_type;
-	char out_type;
-	char err_type;
-	char padding;
-};
-
-struct inh_fd_state {
-	int handle;
-	short index;
-	char type;
-	char padding;
-};
-
+void fd_decode_state(char*);
 #define POSIX_STATE_ENV "c28fc6f98a2c44abbbd89d6a3037d0d9_POSIX_STATE"
-
-static char*
-fd_encode_state(const posix_spawn_file_actions_t *file_actions, HANDLE aux_h[])
-{
-	char *buf, *encoded;
-	struct std_fd_state *std_fd_state;
-	struct inh_fd_state *c;
-	DWORD len_req;
-	BOOL b;
-	int i;
-	int fd_in = file_actions->stdio_redirect[STDIN_FILENO];
-	int fd_out = file_actions->stdio_redirect[STDOUT_FILENO];
-	int fd_err = file_actions->stdio_redirect[STDERR_FILENO];
-	int num_aux_fds = file_actions->num_aux_fds;
-	const int *parent_aux_fds = file_actions->aux_fds_info.parent_fd;
-	const int *child_aux_fds = file_actions->aux_fds_info.child_fd;
-
-	buf = malloc(8 * (1 + num_aux_fds));
-	if (!buf) {
-		errno = ENOMEM;
-		return NULL;
-	}
-
-	std_fd_state = (struct std_fd_state *)buf;
-	std_fd_state->num_inherited = num_aux_fds;
-	std_fd_state->in_type = fd_table.w32_ios[fd_in]->type;
-	std_fd_state->out_type = fd_table.w32_ios[fd_out]->type;
-	std_fd_state->err_type = fd_table.w32_ios[fd_err]->type;
-
-	c = (struct inh_fd_state*)(buf + 8);
-	for (i = 0; i < num_aux_fds; i++) {
-		c->handle = (int)(intptr_t)aux_h[i];
-		c->index = child_aux_fds[i];
-		c->type = fd_table.w32_ios[parent_aux_fds[i]]->type;
-		c++;
-	}
-
-	b = CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, NULL, &len_req);
-	encoded = malloc(len_req);
-	if (!encoded) {
-		errno = ENOMEM;
-		return NULL;
-	}
-	b = CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, encoded, &len_req);
-
-	return encoded;
-}
-
-static void
-fd_decode_state(char* enc_buf)
-{
-	char* buf;
-	DWORD req, skipped, out_flags;
-	struct std_fd_state *std_fd_state;
-	struct inh_fd_state *c;
-	int num_inherited = 0;
-
-	CryptStringToBinary(enc_buf, 0, CRYPT_STRING_BASE64 | CRYPT_STRING_STRICT, NULL, &req, &skipped, &out_flags);
-	buf = malloc(req);
-	CryptStringToBinary(enc_buf, 0, CRYPT_STRING_BASE64 | CRYPT_STRING_STRICT, buf, &req, &skipped, &out_flags);
-
-	std_fd_state = (struct std_fd_state *)buf;
-	fd_table.w32_ios[0]->type = std_fd_state->in_type;
-	if (fd_table.w32_ios[0]->type == SOCK_FD)
-		fd_table.w32_ios[0]->internal.state = SOCK_READY;
-	fd_table.w32_ios[1]->type = std_fd_state->out_type;
-	if (fd_table.w32_ios[1]->type == SOCK_FD)
-		fd_table.w32_ios[1]->internal.state = SOCK_READY;
-	fd_table.w32_ios[2]->type = std_fd_state->err_type;
-	if (fd_table.w32_ios[2]->type == SOCK_FD)
-		fd_table.w32_ios[2]->internal.state = SOCK_READY;
-	num_inherited = std_fd_state->num_inherited;
-
-	c = (struct inh_fd_state*)(buf + 8);
-	while (num_inherited--) {
-		struct w32_io* pio = malloc(sizeof(struct w32_io));
-		ZeroMemory(pio, sizeof(struct w32_io));
-		pio->handle = (void*)(INT_PTR)c->handle;
-		pio->type = c->type;
-		if (pio->type == SOCK_FD)
-			pio->internal.state = SOCK_READY;
-		fd_table_set(pio, c->index);
-		c++;
-	}
-	
-	free(buf);
-	return;
-}
 
 /* initializes mapping table*/
 static int
@@ -200,6 +98,11 @@ fd_table_initialize()
 	}
 
 	_dupenv_s(&posix_state, NULL, POSIX_STATE_ENV);
+	/*TODO - validate parent process - to accomodate these scenarios -
+	* A posix parent process launches a regular process that inturn launches a posix child process
+	* In this case the posix child process may misinterpret POSIX_STATE_ENV set by grand parent
+	*/
+
 	if (NULL != posix_state) {
 		fd_decode_state(posix_state);
 		free(posix_state);
@@ -1149,6 +1052,114 @@ cleanup:
 }
 
 #include "inc\spawn.h"
+
+/* structures defining binary layout of fd info to be transmitted between parent and child processes*/
+struct std_fd_state {
+	int num_inherited;
+	char in_type;
+	char out_type;
+	char err_type;
+	char padding;
+};
+
+struct inh_fd_state {
+	int handle;
+	short index;
+	char type;
+	char padding;
+};
+
+
+/* encodes the fd info into a base64 encoded binary blob */
+static char*
+fd_encode_state(const posix_spawn_file_actions_t *file_actions, HANDLE aux_h[])
+{
+	char *buf, *encoded;
+	struct std_fd_state *std_fd_state;
+	struct inh_fd_state *c;
+	DWORD len_req;
+	BOOL b;
+	int i;
+	int fd_in = file_actions->stdio_redirect[STDIN_FILENO];
+	int fd_out = file_actions->stdio_redirect[STDOUT_FILENO];
+	int fd_err = file_actions->stdio_redirect[STDERR_FILENO];
+	int num_aux_fds = file_actions->num_aux_fds;
+	const int *parent_aux_fds = file_actions->aux_fds_info.parent_fd;
+	const int *child_aux_fds = file_actions->aux_fds_info.child_fd;
+
+	buf = malloc(8 * (1 + num_aux_fds));
+	if (!buf) {
+		errno = ENOMEM;
+		return NULL;
+	}
+
+	std_fd_state = (struct std_fd_state *)buf;
+	std_fd_state->num_inherited = num_aux_fds;
+	std_fd_state->in_type = fd_table.w32_ios[fd_in]->type;
+	std_fd_state->out_type = fd_table.w32_ios[fd_out]->type;
+	std_fd_state->err_type = fd_table.w32_ios[fd_err]->type;
+
+	c = (struct inh_fd_state*)(buf + 8);
+	for (i = 0; i < num_aux_fds; i++) {
+		c->handle = (int)(intptr_t)aux_h[i];
+		c->index = child_aux_fds[i];
+		c->type = fd_table.w32_ios[parent_aux_fds[i]]->type;
+		c++;
+	}
+
+	b = CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, NULL, &len_req);
+	encoded = malloc(len_req);
+	if (!encoded) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	b = CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, encoded, &len_req);
+
+	return encoded;
+}
+
+/* decodes fd info from an encoded binary blob */
+static void
+fd_decode_state(char* enc_buf)
+{
+	char* buf;
+	DWORD req, skipped, out_flags;
+	struct std_fd_state *std_fd_state;
+	struct inh_fd_state *c;
+	int num_inherited = 0;
+
+	CryptStringToBinary(enc_buf, 0, CRYPT_STRING_BASE64 | CRYPT_STRING_STRICT, NULL, &req, &skipped, &out_flags);
+	buf = malloc(req);
+	CryptStringToBinary(enc_buf, 0, CRYPT_STRING_BASE64 | CRYPT_STRING_STRICT, buf, &req, &skipped, &out_flags);
+
+	std_fd_state = (struct std_fd_state *)buf;
+	fd_table.w32_ios[0]->type = std_fd_state->in_type;
+	if (fd_table.w32_ios[0]->type == SOCK_FD)
+		fd_table.w32_ios[0]->internal.state = SOCK_READY;
+	fd_table.w32_ios[1]->type = std_fd_state->out_type;
+	if (fd_table.w32_ios[1]->type == SOCK_FD)
+		fd_table.w32_ios[1]->internal.state = SOCK_READY;
+	fd_table.w32_ios[2]->type = std_fd_state->err_type;
+	if (fd_table.w32_ios[2]->type == SOCK_FD)
+		fd_table.w32_ios[2]->internal.state = SOCK_READY;
+	num_inherited = std_fd_state->num_inherited;
+
+	c = (struct inh_fd_state*)(buf + 8);
+	while (num_inherited--) {
+		struct w32_io* pio = malloc(sizeof(struct w32_io));
+		ZeroMemory(pio, sizeof(struct w32_io));
+		pio->handle = (void*)(INT_PTR)c->handle;
+		pio->type = c->type;
+		if (pio->type == SOCK_FD)
+			pio->internal.state = SOCK_READY;
+		fd_table_set(pio, c->index);
+		c++;
+	}
+
+	free(buf);
+	return;
+}
+
 int
 posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
 {
@@ -1162,7 +1173,7 @@ posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *fil
 		return -1;
 	}
 
-	if (!attrp || attrp->flags == POSIX_SPAWN_SETPGROUP)
+	if (attrp && attrp->flags == POSIX_SPAWN_SETPGROUP)
 		sc_flags = CREATE_NEW_PROCESS_GROUP;
 
 	/* prepare handles */

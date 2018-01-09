@@ -311,22 +311,16 @@ do_cmd(char *host, char *remuser, int port, char *cmd, int *fdin, int *fdout)
 
 	{
 		posix_spawn_file_actions_t actions;
-		posix_spawnattr_t attributes;
 		do_cmd_pid = -1;
 
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, pin[0], STDIN_FILENO) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, pout[1], STDOUT_FILENO) != 0 ||
-			posix_spawnattr_init(&attributes) != 0) {
+		    posix_spawn_file_actions_adddup2(&actions, pin[0], STDIN_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, pout[1], STDOUT_FILENO) != 0 )
 			fatal("posix_spawn initialization failed");
-		}
-		else {
-			if (posix_spawn(&do_cmd_pid, args.list[0], &actions, &attributes, args.list, NULL) != 0) {
-				posix_spawn_file_actions_destroy(&actions);
-				fatal("posix_spawn: %s", strerror(errno));
-			}
+		else if (posix_spawn(&do_cmd_pid, args.list[0], &actions, NULL, args.list, NULL) != 0) 
+			fatal("posix_spawn: %s", strerror(errno));
+			
 			posix_spawn_file_actions_destroy(&actions);
-		}
 	}
 
 #else 
@@ -409,22 +403,16 @@ do_cmd2(char *host, char *remuser, int port, char *cmd, int fdin, int fdout)
 
 	{
 		posix_spawn_file_actions_t actions;
-		posix_spawnattr_t attributes;
 		pid = -1;
 
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, fdin, STDIN_FILENO) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, fdout, STDOUT_FILENO) != 0 ||
-			posix_spawnattr_init(&attributes) != 0) {
+		    posix_spawn_file_actions_adddup2(&actions, fdin, STDIN_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, fdout, STDOUT_FILENO) != 0 ) 
 			fatal("posix_spawn initialization failed");
-		}
-		else {
-			if (posix_spawn(&pid, args.list[0], &actions, &attributes, args.list, NULL) != 0) {
-				posix_spawn_file_actions_destroy(&actions);
-				fatal("posix_spawn: %s", strerror(errno));
-			}
-			posix_spawn_file_actions_destroy(&actions);
-		}
+		else if (posix_spawn(&pid, args.list[0], &actions, NULL, args.list, NULL) != 0) 
+			fatal("posix_spawn: %s", strerror(errno));
+
+		posix_spawn_file_actions_destroy(&actions);
 	}		
 #else 
 	pid = fork();

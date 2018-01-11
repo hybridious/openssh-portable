@@ -2041,8 +2041,6 @@ main(int ac, char **av)
 			keytype = pubkey->type;
 		} else if (key != NULL) {
 			keytype = key->type;
-		} else if ((privsep_auth_child || privsep_unauth_child) && pubkey) { 
-			keytype = pubkey->type;//do nothing /* TODO - remove this */
 		} else {
 			error("Could not load host key: %s",
 			    options.host_key_files[i]);
@@ -2067,7 +2065,6 @@ main(int ac, char **av)
 		    key ? "private" : "agent", i, sshkey_ssh_name(pubkey), fp);
 		free(fp);
 	}
-	if (privsep_auth_child || privsep_unauth_child) {/* TODO removee this */} else
 	if (!sensitive_data.have_ssh2_key) {
 		logit("sshd: no hostkeys available -- exiting.");
 		exit(1);

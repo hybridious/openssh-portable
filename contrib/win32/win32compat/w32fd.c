@@ -817,7 +817,6 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 static HANDLE
 dup_handle(int fd) 
 {
-	HANDLE ret = 0;
 	HANDLE h = fd_table.w32_ios[fd]->handle;
 	int is_sock = fd_table.w32_ios[fd]->type == SOCK_FD;
 
@@ -825,11 +824,18 @@ dup_handle(int fd)
 		SOCKET dup_sock;
 		SOCKET sock = (SOCKET)h;
 		WSAPROTOCOL_INFOW info;
-		int r = WSADuplicateSocketW(sock, GetCurrentProcessId(), &info);
-		r = WSAGetLastError();
+		if (WSADuplicateSocketW(sock, GetCurrentProcessId(), &info) != 0) {
+			errno = EOTHER;
+			debug3("WSADuplicateSocket failed, WSALastError: %d", WSAGetLastError());
+			return NULL;
+		} 
 		dup_sock = WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &info, 0, 0);
-		r = WSAGetLastError();
-		ret = (HANDLE)dup_sock;
+		if (dup_sock == INVALID_SOCKET) {
+			errno = EOTHER;
+			debug3("WSASocketW failed, WSALastError: %d", WSAGetLastError());
+			return NULL;
+		}
+		return (HANDLE)dup_sock;
 	}
 	else {
 		HANDLE dup_handle;
@@ -837,9 +843,8 @@ dup_handle(int fd)
 			errno = EOTHER;
 			debug3("dup - ERROR: DuplicatedHandle() :%d", GetLastError());
 		}
-		ret = dup_handle;
+		return dup_handle;
 	}
-	return ret;
 }
 
 int

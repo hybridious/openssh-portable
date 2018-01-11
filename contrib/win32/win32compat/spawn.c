@@ -7,9 +7,6 @@
 #include "inc\spawn.h"
 #include "inc\unistd.h"
 
-
-extern HANDLE spawn_user_token;
-
 int
 posix_spawnp(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
 {
@@ -24,14 +21,12 @@ posix_spawn_file_actions_init(posix_spawn_file_actions_t *file_actions)
 	file_actions->stdio_redirect[0] = 0;
 	file_actions->stdio_redirect[1] = 1;
 	file_actions->stdio_redirect[2] = 2;
-	spawn_user_token = NULL;
 	return 0;
 }
 
 int
 posix_spawn_file_actions_destroy(posix_spawn_file_actions_t *file_actions)
 {
-	spawn_user_token = NULL;
 	return 0;
 }
 
@@ -78,6 +73,7 @@ posix_spawnattr_init(posix_spawnattr_t *attr)
 int
 posix_spawnattr_destroy(posix_spawnattr_t *attr)
 {
+	memset(attr, 0, sizeof(posix_spawnattr_t));
 	return 0;
 }
 
@@ -105,9 +101,4 @@ int posix_spawnattr_getpgroup(const posix_spawnattr_t * attr, pid_t * pgroup) {
 
 int posix_spawnattr_setpgroup(posix_spawnattr_t *attr, pid_t pgroup) {
 	return 0;
-}
-
-void spawn_set_user(HANDLE user) 
-{
-	spawn_user_token = user;
 }

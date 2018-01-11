@@ -39,6 +39,7 @@
 #include "logonuser.h"
 #include <Ntsecapi.h>
 #include <ntstatus.h>
+#include "misc_internal.h"
 #include "Debug.h"
 
 #pragma warning(push, 3)
@@ -222,7 +223,7 @@ done:
 }
 
 HANDLE
-process_custom_lsa_auth(char* user, char* pwd, char* lsa_pkg)
+process_custom_lsa_auth(char* user, const char* pwd, char* lsa_pkg)
 {
 	wchar_t *userw = NULL, *pwdw = NULL, *domw = NULL, *tmp, *providerw = NULL;
 	HANDLE token = NULL, lsa_handle = NULL;

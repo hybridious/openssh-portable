@@ -666,7 +666,7 @@ recv_hostkeys_state(int fd)
 	Buffer b, *m = &b;
 	char *cp;
 	struct sshkey *key = NULL;
-	char *blob;
+	const char *blob;
 	int blen;
 
 	buffer_init(m);
@@ -729,8 +729,11 @@ privsep_preauth(Authctxt *authctxt)
 	pmonitor->m_pkex = &active_state->kex;
 
 #ifdef FORK_NOT_SUPPORTED
-	if (privsep_auth_child)
+	if (privsep_auth_child) {
+		authctxt->pw = w32_getpwuid(1);
+		authctxt->valid = 1;
 		return 1;
+	}
 	else if (privsep_unauth_child) {
 		close(pmonitor->m_sendfd);
 		close(pmonitor->m_log_recvfd);
@@ -749,26 +752,18 @@ privsep_preauth(Authctxt *authctxt)
 	}
 	else { /* parent */
 		posix_spawn_file_actions_t actions;
-		posix_spawnattr_t attributes;
 
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDIN_FILENO) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDOUT_FILENO) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, pmonitor->m_recvfd, PRIVSEP_MONITOR_FD) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, pmonitor->m_log_sendfd, PRIVSEP_LOG_FD) != 0 ||
-			posix_spawnattr_init(&attributes) != 0 ||
-			posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP) != 0 ||
-			posix_spawnattr_setpgroup(&attributes, 0) != 0) {
-			error("posix_spawn initialization failed");
-		}
+		    posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDIN_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDOUT_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, pmonitor->m_recvfd, PRIVSEP_MONITOR_FD) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, pmonitor->m_log_sendfd, PRIVSEP_LOG_FD) != 0 )
+			error("posix_spawn initialization failed");		
 		else {
 			char** argv = privsep_child_cmdline(0);
-			HANDLE sshd_token = get_user_token(SSH_PRIVSEP_USER);
-			spawn_set_user(sshd_token);
-			if (posix_spawn(&pid, argv[0], &actions, &attributes, argv, NULL) != 0)
+			if (__posix_spawn_asuser(&pid, argv[0], &actions, NULL, argv, NULL, SSH_PRIVSEP_USER) != 0)
 				error("posix_spawn failed");
 			posix_spawn_file_actions_destroy(&actions);
-			CloseHandle(sshd_token);
 		}
 		close(pmonitor->m_recvfd);
 		close(pmonitor->m_log_sendfd);
@@ -848,15 +843,15 @@ privsep_preauth(Authctxt *authctxt)
 static void
 privsep_postauth(Authctxt *authctxt)
 {
-//#ifdef DISABLE_FD_PASSING
-//	if (1) {
-//#else
-//	if (authctxt->pw->pw_uid == 0) {
-//#endif
-//		/* File descriptor passing is broken or root login */
-//		use_privsep = 0;
-//		goto skip;
-//	}
+#ifdef DISABLE_FD_PASSING
+	if (1) {
+#else
+	if (authctxt->pw->pw_uid == 0) {
+#endif
+		/* File descriptor passing is broken or root login */
+		use_privsep = 0;
+		goto skip;
+	}
 
 	/* New socket pair */
 	monitor_reinit(pmonitor);
@@ -864,20 +859,15 @@ privsep_postauth(Authctxt *authctxt)
 #ifdef FORK_NOT_SUPPORTED
 	if (!privsep_auth_child) { /* parent */
 		posix_spawn_file_actions_t actions;
-		posix_spawnattr_t attributes;
 
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDIN_FILENO) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDOUT_FILENO) != 0 ||
-			posix_spawn_file_actions_adddup2(&actions, pmonitor->m_recvfd, PRIVSEP_MONITOR_FD) != 0 ||
-			posix_spawnattr_init(&attributes) != 0 ||
-			posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP) != 0 ||
-			posix_spawnattr_setpgroup(&attributes, 0) != 0) {
+		    posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDIN_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDOUT_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, pmonitor->m_recvfd, PRIVSEP_MONITOR_FD) != 0)
 			error("posix_spawn initialization failed");
-		} else {
+		else {
 			char** argv = privsep_child_cmdline(1);
-			spawn_set_user(get_user_token(authctxt->pw->pw_name));
-			if (posix_spawn(&pmonitor->m_pid, argv[0], &actions, &attributes, argv, NULL) != 0)
+			if (__posix_spawn_asuser(&pmonitor->m_pid, argv[0], &actions, NULL, argv, NULL, authctxt->pw->pw_name) != 0)
 				error("posix_spawn failed");
 			posix_spawn_file_actions_destroy(&actions);
 		}
@@ -896,8 +886,6 @@ privsep_postauth(Authctxt *authctxt)
 	close(pmonitor->m_recvfd);
 
 	pmonitor->m_recvfd = PRIVSEP_MONITOR_FD;
-	authctxt->pw = w32_getpwuid(1);
-	authctxt->valid = 1;
 
 	monitor_recv_keystate(pmonitor);
 	monitor_apply_keystate(pmonitor);
@@ -1535,15 +1523,15 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 				posix_spawn_file_actions_t actions;
 				posix_spawnattr_t attributes;
 				if (posix_spawn_file_actions_init(&actions) != 0 ||
-					posix_spawn_file_actions_adddup2(&actions, *newsock, STDIN_FILENO) != 0 ||
-					posix_spawn_file_actions_adddup2(&actions, *newsock, STDOUT_FILENO) != 0 ||
-					posix_spawn_file_actions_adddup2(&actions, startup_p[1], REEXEC_STARTUP_PIPE_FD) != 0 ||
-					posix_spawn_file_actions_adddup2(&actions, config_s[1], REEXEC_CONFIG_PASS_FD) != 0 ||
-					posix_spawnattr_init(&attributes) != 0 ||
-					posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP) != 0 ||
-					posix_spawnattr_setpgroup(&attributes, 0) != 0) {
+				    posix_spawn_file_actions_adddup2(&actions, *newsock, STDIN_FILENO) != 0 ||
+				    posix_spawn_file_actions_adddup2(&actions, *newsock, STDOUT_FILENO) != 0 ||
+				    posix_spawn_file_actions_adddup2(&actions, startup_p[1], REEXEC_STARTUP_PIPE_FD) != 0 ||
+				    posix_spawn_file_actions_adddup2(&actions, config_s[1], REEXEC_CONFIG_PASS_FD) != 0 ||
+				    posix_spawnattr_init(&attributes) != 0 ||
+				    posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP) != 0 ||
+				    posix_spawnattr_setpgroup(&attributes, 0) != 0)
 					error("posix_spawn initialization failed");
-				} else {
+				else {
 					if (posix_spawn(&pid, rexec_argv[0], &actions, &attributes, rexec_argv, NULL) != 0)
 						error("posix_spawn failed");
 					posix_spawn_file_actions_destroy(&actions);

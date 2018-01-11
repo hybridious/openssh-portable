@@ -934,12 +934,11 @@ int fork()
 * to account for any spaces within the commandline
 * this decoration is done only when additional arguments are passed in argv
 *
-* spawned child will run as spawn_user_token if spawn_user_token != NULL
+* spawned child will run as as_user if its not NULL
 */
 
-HANDLE spawn_user_token = NULL;
 static int
-spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags)
+spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags, HANDLE* as_user)
 {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
@@ -1023,8 +1022,8 @@ spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDL
 
 	debug3("spawning %ls", cmdline_utf16);
 	
-	if (spawn_user_token)
-		b = CreateProcessAsUserW(spawn_user_token, NULL, cmdline_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+	if (as_user)
+		b = CreateProcessAsUserW(as_user, NULL, cmdline_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
 	else
 		b = CreateProcessW(NULL, cmdline_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
 
@@ -1161,7 +1160,7 @@ fd_decode_state(char* enc_buf)
 }
 
 int
-posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
+posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token)
 {
 	int i, ret = -1;
 	int sc_flags = 0;
@@ -1201,7 +1200,7 @@ posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *fil
 
 	if (_putenv_s(POSIX_STATE_ENV, fd_info) != 0)
 		goto cleanup;
-	i = spawn_child_internal(argv[0], argv + 1, stdio_handles[STDIN_FILENO], stdio_handles[STDOUT_FILENO], stdio_handles[STDERR_FILENO], sc_flags);
+	i = spawn_child_internal(argv[0], argv + 1, stdio_handles[STDIN_FILENO], stdio_handles[STDOUT_FILENO], stdio_handles[STDERR_FILENO], sc_flags, user_token);
 	if (i == -1)
 		goto cleanup;
 	if (pidp)
@@ -1229,4 +1228,10 @@ cleanup:
 		free(fd_info);
 	
 	return ret;
+}
+
+int
+posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
+{
+	return posix_spawn_internal(pidp, path, file_actions, attrp, argv, envp, NULL);
 }

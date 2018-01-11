@@ -37,3 +37,6 @@ void invalid_parameter_handler(const wchar_t *, const wchar_t *, const wchar_t *
 static char *machine_domain_name;
 void to_lower_case(char *s);
 int get_machine_domain_name(wchar_t *domain, int size);
+
+HANDLE get_user_token(char* user);
+int load_user_profile(HANDLE user_token, char* user);

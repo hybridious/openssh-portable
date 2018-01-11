@@ -231,7 +231,7 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 
 #elif defined(WINDOWS)
 HANDLE password_auth_token = NULL;
-HANDLE process_custom_lsa_auth(char*, char*, char*);
+HANDLE process_custom_lsa_auth(char*, const char*, char*);
 
 void 
 sys_auth_passwd_lsa(Authctxt *authctxt, const char *password)

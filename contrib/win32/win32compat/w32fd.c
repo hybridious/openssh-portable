@@ -826,13 +826,13 @@ dup_handle(int fd)
 		WSAPROTOCOL_INFOW info;
 		if (WSADuplicateSocketW(sock, GetCurrentProcessId(), &info) != 0) {
 			errno = EOTHER;
-			debug3("WSADuplicateSocket failed, WSALastError: %d", WSAGetLastError());
+			error("WSADuplicateSocket failed, WSALastError: %d", WSAGetLastError());
 			return NULL;
 		} 
 		dup_sock = WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &info, 0, 0);
 		if (dup_sock == INVALID_SOCKET) {
 			errno = EOTHER;
-			debug3("WSASocketW failed, WSALastError: %d", WSAGetLastError());
+			error("WSASocketW failed, WSALastError: %d", WSAGetLastError());
 			return NULL;
 		}
 		return (HANDLE)dup_sock;
@@ -841,36 +841,10 @@ dup_handle(int fd)
 		HANDLE dup_handle;
 		if (!DuplicateHandle(GetCurrentProcess(), h, GetCurrentProcess(), &dup_handle, 0, TRUE, DUPLICATE_SAME_ACCESS)) {
 			errno = EOTHER;
-			debug3("dup - ERROR: DuplicatedHandle() :%d", GetLastError());
+			error("dup - ERROR: DuplicatedHandle() :%d", GetLastError());
 		}
 		return dup_handle;
 	}
-}
-
-int
-w32_dup(int oldfd)
-{
-	int min_index;
-	struct w32_io* pio;
-	CHECK_FD(oldfd);
-
-	if ((min_index = fd_table_get_min_index()) == -1)
-		return -1;
-
-	pio = (struct w32_io*) malloc(sizeof(struct w32_io));
-	if (pio == NULL) {
-		errno = ENOMEM;
-		return -1;
-	}
-
-	memset(pio, 0, sizeof(struct w32_io));
-	if ((pio->handle = dup_handle(oldfd)) == 0)
-		return -1;
-	pio->type = fd_table.w32_ios[oldfd]->type;
-	if (pio->type == SOCK_FD)
-		pio->internal.state = SOCK_READY;
-	fd_table_set(pio, min_index);
-	return min_index;
 }
 
 int
@@ -883,17 +857,41 @@ w32_dup2(int oldfd, int newfd)
 		w32_close(newfd);
 
 	pio = malloc(sizeof(struct w32_io));
-	ZeroMemory(pio, sizeof(struct w32_io));
-	pio->type = fd_table.w32_ios[oldfd]->type;
-
-	if ((pio->handle = dup_handle(oldfd)) == 0)
+	if (pio == NULL) {
+		errno = ENOMEM;
 		return -1;
-	if (pio->type == SOCK_FD) 
+	}
+
+	memset(pio, 0, sizeof(struct w32_io));
+	if ((pio->handle = dup_handle(oldfd)) == 0) {
+		free(pio);
+		return -1;
+	}
+
+	pio->type = fd_table.w32_ios[oldfd]->type;
+	if (pio->type == SOCK_FD)
 		pio->internal.state = SOCK_READY;
-	
+
 	fd_table_set(pio, newfd);
 	return 0;
 }
+
+int
+w32_dup(int oldfd)
+{
+	int min_index, r;
+	CHECK_FD(oldfd);
+
+	if ((min_index = fd_table_get_min_index()) == -1)
+		return -1;
+
+	if ((r = w32_dup2(oldfd, min_index)) != 0)
+		return r;
+
+	return min_index;
+}
+
+
 
 HANDLE
 w32_fd_to_handle(int fd)
@@ -1114,11 +1112,13 @@ fd_encode_state(const posix_spawn_file_actions_t *file_actions, HANDLE aux_h[])
 	b = CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, NULL, &len_req);
 	encoded = malloc(len_req);
 	if (!encoded) {
+		free(buf);
 		errno = ENOMEM;
 		return NULL;
 	}
 	b = CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, encoded, &len_req);
 
+	free(buf);
 	return encoded;
 }
 
@@ -1134,6 +1134,9 @@ fd_decode_state(char* enc_buf)
 
 	CryptStringToBinary(enc_buf, 0, CRYPT_STRING_BASE64 | CRYPT_STRING_STRICT, NULL, &req, &skipped, &out_flags);
 	buf = malloc(req);
+	if (!buf) 
+		fatal("out of memory");
+
 	CryptStringToBinary(enc_buf, 0, CRYPT_STRING_BASE64 | CRYPT_STRING_STRICT, buf, &req, &skipped, &out_flags);
 
 	std_fd_state = (struct std_fd_state *)buf;
@@ -1151,6 +1154,8 @@ fd_decode_state(char* enc_buf)
 	c = (struct inh_fd_state*)(buf + 8);
 	while (num_inherited--) {
 		struct w32_io* pio = malloc(sizeof(struct w32_io));
+		if (!pio)
+			fatal("out of memory");
 		ZeroMemory(pio, sizeof(struct w32_io));
 		pio->handle = (void*)(INT_PTR)c->handle;
 		pio->type = c->type;
@@ -1186,21 +1191,17 @@ posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actio
 	stdio_handles[STDIN_FILENO] = dup_handle(file_actions->stdio_redirect[STDIN_FILENO]);
 	stdio_handles[STDOUT_FILENO] = dup_handle(file_actions->stdio_redirect[STDOUT_FILENO]);
 	stdio_handles[STDERR_FILENO] = dup_handle(file_actions->stdio_redirect[STDERR_FILENO]);
-	if (!stdio_handles[STDIN_FILENO] || !stdio_handles[STDOUT_FILENO] || !stdio_handles[STDERR_FILENO]) {
-		errno = ENOMEM;
+	if (!stdio_handles[STDIN_FILENO] || !stdio_handles[STDOUT_FILENO] || !stdio_handles[STDERR_FILENO]) 
 		goto cleanup;
-	}
+	
 	for (i = 0; i < file_actions->num_aux_fds; i++) {
 		aux_handles[i] = dup_handle(file_actions->aux_fds_info.parent_fd[i]);
-		if (aux_handles[i] == NULL) {
-			errno = ENOMEM;
-			goto cleanup;
-		} 
+		if (aux_handles[i] == NULL) 
+			goto cleanup;		
 	}
 
 	/* set fd info */
-	if ((fd_info = fd_encode_state(file_actions,
-					aux_handles)) == NULL)
+	if ((fd_info = fd_encode_state(file_actions, aux_handles)) == NULL)
 		goto cleanup;
 
 	if (_putenv_s(POSIX_STATE_ENV, fd_info) != 0)

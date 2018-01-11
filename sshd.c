@@ -572,8 +572,20 @@ privsep_preauth_child(void)
 	}
 }
 
-static void
-send_rexec_state(int fd, struct sshbuf *conf);
+void
+send_rexec_state(int, struct sshbuf *);
+static void send_config_state(int fd, struct sshbuf *conf)
+{
+	send_rexec_state(fd, conf);
+}
+
+void
+recv_rexec_state(int, Buffer *);
+static void recv_config_state(int fd, Buffer *conf)
+{
+	recv_rexec_state(fd, conf);
+}
+
 
 static void
 send_idexch_state(int fd)
@@ -767,7 +779,7 @@ privsep_preauth(Authctxt *authctxt)
 		}
 		close(pmonitor->m_recvfd);
 		close(pmonitor->m_log_sendfd);
-		send_rexec_state(pmonitor->m_sendfd, &cfg);
+		send_config_state(pmonitor->m_sendfd, &cfg);
 		send_hostkeys_state(pmonitor->m_sendfd);
 		send_idexch_state(pmonitor->m_sendfd);
 		monitor_child_preauth(authctxt, pmonitor);
@@ -872,7 +884,7 @@ privsep_postauth(Authctxt *authctxt)
 			posix_spawn_file_actions_destroy(&actions);
 		}
 		
-		send_rexec_state(pmonitor->m_sendfd, &cfg);
+		send_config_state(pmonitor->m_sendfd, &cfg);
 		send_hostkeys_state(pmonitor->m_sendfd);
 		send_idexch_state(pmonitor->m_sendfd);
 		monitor_send_keystate(pmonitor);
@@ -1927,7 +1939,7 @@ main(int ac, char **av)
 	if (rexeced_flag)
 		recv_rexec_state(REEXEC_CONFIG_PASS_FD, &cfg);
 	else if (privsep_unauth_child || privsep_auth_child)
-		recv_rexec_state(PRIVSEP_MONITOR_FD, &cfg);
+		recv_config_state(PRIVSEP_MONITOR_FD, &cfg);
 	else if (strcasecmp(config_file_name, "none") != 0)
 		load_server_config(config_file_name, &cfg);
 

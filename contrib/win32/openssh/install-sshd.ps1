@@ -31,6 +31,9 @@ cmd.exe /c 'sc.exe sdset ssh-agent D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPW
 
 New-Service -Name sshd -BinaryPathName `"$sshdpath`" -Description "SSH Daemon" -StartupType Manual | Out-Null
 
+# create sshd account with random password if it does not already exist
+New-LocalUser -Name sshd -AccountNeverExpires -Password (ConvertTo-SecureString (new-guid).guid -AsPlainText -Force) -ErrorAction SilentlyContinue | Out-Null
+
 # create logs folder and set its permissions
 if(-not (test-path $logsdir -PathType Container))
 {

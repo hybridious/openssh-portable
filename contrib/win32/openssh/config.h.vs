@@ -1691,7 +1691,7 @@
 
 #define HAVE_MBLEN 1
 
-#define _PATH_PRIVSEP_CHROOT_DIR "\\"
+#define _PATH_PRIVSEP_CHROOT_DIR "."
 #define SSHDIR "."
 #define _PATH_SFTP_SERVER "sftp-server.exe"
 #define _PATH_SSH_PROGRAM "ssh.exe"

@@ -1861,11 +1861,13 @@ main(int ac, char **av)
 		case 'y':
 			privsep_unauth_child = 1;
 			rexec_flag = 0;
+			logfile = NULL;
 			//Sleep(10 * 1000);
 			break;
 		case 'z':
 			privsep_auth_child = 1;
 			rexec_flag = 0;
+			logfile = NULL;
 			//Sleep(10 * 1000);
 			break;
 		case '?':

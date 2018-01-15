@@ -244,8 +244,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
            Add-LocalUser -UserName $allowUser4 -Password $password
 
            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $allowUser4@$server echo 1234
-           Stop-SSHD-TestDaemon
            $LASTEXITCODE | Should Not Be 0
+           Stop-SSHD-TestDaemon
            $logPath | Should Contain "not allowed because not in any group"
            
         }
@@ -257,8 +257,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
            Add-UserToLocalGroup -UserName $denyUser1 -Password $password -GroupName $allowGroup1
 
            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $denyUser1@$server echo 1234
-           Stop-SSHD-TestDaemon
            $LASTEXITCODE | Should Not Be 0
+           Stop-SSHD-TestDaemon
            $logPath | Should Contain "not allowed because listed in DenyUsers"
 
            Remove-UserFromLocalGroup -UserName $denyUser1 -GroupName $allowGroup1
@@ -272,8 +272,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
            Add-UserToLocalGroup -UserName $denyUser2 -Password $password -GroupName $allowGroup1
 
            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $denyUser2@$server echo 1234
-           Stop-SSHD-TestDaemon
            $LASTEXITCODE | Should Not Be 0
+           Stop-SSHD-TestDaemon
            $logPath | Should Contain "not allowed because listed in DenyUsers"
 
            Remove-UserFromLocalGroup -UserName $denyUser2 -GroupName $allowGroup1
@@ -287,8 +287,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
            Add-UserToLocalGroup -UserName $denyUser3 -Password $password -GroupName $allowGroup1
 
            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $denyUser3@$server echo 1234
-           Stop-SSHD-TestDaemon
            $LASTEXITCODE | Should Not Be 0
+           Stop-SSHD-TestDaemon
            $logPath | Should Contain "not allowed because not listed in AllowUsers"
            
            Remove-UserFromLocalGroup -UserName $denyUser3 -GroupName $allowGroup1
@@ -303,8 +303,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
            Add-UserToLocalGroup -UserName $localuser1 -Password $password -GroupName $denyGroup1
            
            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $localuser1@$server echo 1234
-           Stop-SSHD-TestDaemon
            $LASTEXITCODE | Should Not Be 0
+           Stop-SSHD-TestDaemon
            $logPath | Should Contain "not allowed because a group is listed in DenyGroups"
 
            Remove-UserFromLocalGroup -UserName $localuser1 -GroupName $allowGroup1
@@ -319,8 +319,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
            Add-UserToLocalGroup -UserName $localuser2 -Password $password -GroupName $denyGroup2
            
            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $localuser2@$server echo 1234
-           Stop-SSHD-TestDaemon
            $LASTEXITCODE | Should Not Be 0
+           Stop-SSHD-TestDaemon
            $logPath | Should Contain "not allowed because a group is listed in DenyGroups"
            
            Remove-UserFromLocalGroup -UserName $localuser2 -GroupName $denyGroup2
@@ -334,8 +334,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
            Add-UserToLocalGroup -UserName $localuser3 -Password $password -GroupName $denyGroup3
            
            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $localuser3@$server echo 1234
-           Stop-SSHD-TestDaemon
            $LASTEXITCODE | Should Not Be 0
+           Stop-SSHD-TestDaemon
            $logPath | Should Contain "not allowed because a group is listed in DenyGroups"
            
            Remove-UserFromLocalGroup -UserName $localuser3 -GroupName $denyGroup3

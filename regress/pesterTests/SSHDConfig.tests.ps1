@@ -43,6 +43,9 @@ Describe "Tests of sshd_config" -Tags "CI" {
         function Stop-SSHD-TestDaemon
         {
             Stop-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname
+            #stop-scheduledTask does not wait for worker process to end. Kill it if still running. Logic below assume sshd service is running
+            $svcpid = ((tasklist /svc | select-string -Pattern ".+sshd").ToString() -split "\s+")[1]
+            (gps sshd).id | foreach { if ((-not($_ -eq $svcpid))) {Stop-Process $_ -Force} }
         }
 
         function Add-LocalUser

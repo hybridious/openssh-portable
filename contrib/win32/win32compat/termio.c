@@ -105,16 +105,18 @@ ReadThread(_In_ LPVOID lpParameter)
 				goto done;
 			}
 
-			char *p = NULL;
-			if (p = strstr(pio->read_details.buf, "\r\n"))
-				*p++ = '\n';
-			else if (p = strstr(pio->read_details.buf, "\r"))
-				*p++ = '\n';
+			if (pio->sync_read_status.transferred) {
+				char *p = NULL;
+				if (p = strstr(pio->read_details.buf, "\r\n"))
+					*p++ = '\n';
+				else if (p = strstr(pio->read_details.buf, "\r"))
+					*p++ = '\n';
 
-			if (p) {
-				*p = '\0';
-				pio->read_details.buf_size = (DWORD)strlen(pio->read_details.buf);
-				pio->sync_read_status.transferred = pio->read_details.buf_size;
+				if (p) {
+					*p = '\0';
+					pio->read_details.buf_size = (DWORD)strlen(pio->read_details.buf);
+					pio->sync_read_status.transferred = pio->read_details.buf_size;
+				}
 			}
 		}
 	} else {

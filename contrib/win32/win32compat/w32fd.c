@@ -951,7 +951,7 @@ spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDL
 	char * const *t1;
 	DWORD cmdline_len = 0;
 	wchar_t * cmdline_utf16 = NULL;
-	int add_module_path = 0, ret = -1;		
+	int add_module_path = 0, ret = -1;
 
 	/* should module path be added */
 	if (!cmd) {

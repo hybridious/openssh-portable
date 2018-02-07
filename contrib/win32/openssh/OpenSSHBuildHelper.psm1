@@ -330,7 +330,8 @@ function Start-OpenSSHPackage
         [string]$Configuration = "Release",
 
         # Copy payload to DestinationPath instead of packaging
-        [string]$DestinationPath = ""
+        [string]$DestinationPath = "",
+        [switch]$NoOpenSSL
     )
 
     [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
@@ -390,7 +391,10 @@ function Start-OpenSSHPackage
 
     #copy libcrypto dll
     $libreSSLSDKPath = Join-Path $PSScriptRoot $script:libreSSLSDKStr
-    Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop    
+    if (-not $NoOpenSSL.IsPresent) 
+    {        
+        Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
+    }    
 
     if ($DestinationPath -ne "") {
         if (Test-Path $DestinationPath) {            
@@ -411,14 +415,21 @@ function Start-OpenSSHPackage
         }
         else
         {
-               Write-BuildMsg -AsInfo -Message "Packaged Payload not compressed."
+            Write-BuildMsg -AsInfo -Message "Packaged Payload not compressed."
         }
     }
-    Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue    
     
     if ($DestinationPath -ne "") {
-        Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse
-        Write-BuildMsg -AsInfo -Message "Copied symbols to $DestinationPath"
+        $SymbolDestination = "$($DestinationPath)_Symbols"
+        if (Test-Path $SymbolDestination) {            
+            Remove-Item $SymbolDestination\* -Force -Recurse -ErrorAction SilentlyContinue
+        }
+        else {
+            New-Item -ItemType Directory $SymbolDestination -Force | Out-Null
+        }
+        Copy-Item -Path $symbolsDir\* -Destination $SymbolDestination -Force -Recurse
+        Write-BuildMsg -AsInfo -Message "Copied symbols to $SymbolDestination"
     }
     else {
         Remove-Item ($symbolsDir + '.zip') -Force -ErrorAction SilentlyContinue
